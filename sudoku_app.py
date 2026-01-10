@@ -1,6 +1,8 @@
 import streamlit as st
 import numpy as np
 
+# ------------------ Sudoku Logic ------------------
+
 def is_safe(board, row, col, num):
     for x in range(9):
         if board[row][x] == num:
@@ -15,7 +17,6 @@ def is_safe(board, row, col, num):
             if board[i + start_row][j + start_col] == num:
                 return False
     return True
-
 
 def fill_naked_singles(board):
     progress = False
@@ -33,10 +34,8 @@ def fill_naked_singles(board):
                     progress = True
     return progress
 
-
 def fill_hidden_singles(board):
     progress = False
-
     for row in range(9):
         for num in range(1, 10):
             possible_col = -1
@@ -48,7 +47,6 @@ def fill_hidden_singles(board):
             if count == 1:
                 board[row][possible_col] = num
                 progress = True
-
     for col in range(9):
         for num in range(1, 10):
             possible_row = -1
@@ -60,9 +58,7 @@ def fill_hidden_singles(board):
             if count == 1:
                 board[possible_row][col] = num
                 progress = True
-
     return progress
-
 
 def apply_techniques(board):
     progress = True
@@ -71,7 +67,6 @@ def apply_techniques(board):
         progress |= fill_naked_singles(board)
         progress |= fill_hidden_singles(board)
 
-
 def find_empty(board):
     for row in range(9):
         for col in range(9):
@@ -79,12 +74,10 @@ def find_empty(board):
                 return row, col
     return None
 
-
 def solve_backtrack(board):
     find = find_empty(board)
     if not find:
         return True
-
     row, col = find
     for num in range(1, 10):
         if is_safe(board, row, col, num):
@@ -94,17 +87,31 @@ def solve_backtrack(board):
             board[row][col] = 0
     return False
 
-
 def solve_sudoku(board):
     apply_techniques(board)
     return solve_backtrack(board)
 
+# ------------------ Board Validation ------------------
+
+def is_board_valid(board):
+    """Check for duplicates in rows, columns, and 3x3 boxes."""
+    for row in range(9):
+        for col in range(9):
+            num = board[row][col]
+            if num != 0:
+                board[row][col] = 0  # temporarily remove
+                if not is_safe(board, row, col, num):
+                    board[row][col] = num
+                    return False
+                board[row][col] = num
+    return True
+
+# ------------------ UI ------------------
 
 def get_cell_style(i, j, is_input=True):
     border_right = "3px solid #2c3e50" if (j + 1) % 3 == 0 and j != 8 else "1px solid #bdc3c7"
     border_bottom = "3px solid #2c3e50" if (i + 1) % 3 == 0 and i != 8 else "1px solid #bdc3c7"
     bg_color = "#f8f9fa" if is_input else "#e8f5e9"
-
     return f"""
         background-color: {bg_color};
         padding: 15px;
@@ -122,9 +129,6 @@ def get_cell_style(i, j, is_input=True):
         justify-content: center;
     """
 
-
-# ------------------ UI ------------------
-
 st.set_page_config(page_title="Sudoku Solver", page_icon="🧩", layout="wide")
 st.title("🧩 Sudoku Solver Pro")
 
@@ -132,41 +136,43 @@ if "board" not in st.session_state:
     st.session_state.board = np.zeros((9, 9), dtype=int)
     st.session_state.solved_board = None
 
-
 tab1, tab2, tab3 = st.tabs(["🎮 Solve Puzzle", "📚 How It Works", "ℹ️ About"])
-
 
 with tab1:
     st.markdown("<h2 style='text-align: center;'>🎯 Enter Your Puzzle</h2>", unsafe_allow_html=True)
-
     col1, col2 = st.columns(2)
 
+    # Clear board
     with col1:
         if st.button("🗑️ Clear Board"):
-            # 🔑 FIX: clear widget state as well
             for i in range(9):
                 for j in range(9):
                     st.session_state[f"input_{i}_{j}"] = 0
             st.session_state.board = np.zeros((9, 9), dtype=int)
             st.session_state.solved_board = None
 
+    # Solve puzzle
     with col2:
         if st.button("✨ Solve Puzzle"):
-            board_copy = st.session_state.board.copy()
-            if solve_sudoku(board_copy):
-                st.session_state.solved_board = board_copy
-                st.success("✅ Puzzle solved successfully!")
+            if not is_board_valid(st.session_state.board):
+                st.error("❌ Invalid puzzle! Duplicates in row, column, or box detected.")
             else:
-                st.error("❌ No solution exists!")
+                board_copy = st.session_state.board.copy()
+                if solve_sudoku(board_copy):
+                    st.session_state.solved_board = board_copy
+                    st.success("✅ Puzzle solved successfully!")
+                    st.balloons()  # 🎉 balloons
+                else:
+                    st.error("❌ No solution exists!")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     col_left, col_right = st.columns(2)
 
+    # Input grid
     with col_left:
         st.markdown("<h3 style='text-align: center;'>📝 Input Puzzle</h3>", unsafe_allow_html=True)
         st.markdown("<div style='background-color: white; padding: 20px; border-radius: 15px;'>", unsafe_allow_html=True)
-
         for i in range(9):
             cols = st.columns(9)
             for j in range(9):
@@ -180,13 +186,12 @@ with tab1:
                         label_visibility="collapsed"
                     )
                     st.session_state.board[i][j] = val
-
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # Solution grid
     with col_right:
         st.markdown("<h3 style='text-align: center;'>✅ Solution</h3>", unsafe_allow_html=True)
         st.markdown("<div style='background-color: white; padding: 20px; border-radius: 15px;'>", unsafe_allow_html=True)
-
         if st.session_state.solved_board is not None:
             for i in range(9):
                 cols = st.columns(9)
@@ -194,16 +199,12 @@ with tab1:
                     with cols[j]:
                         val = st.session_state.solved_board[i][j]
                         is_input = st.session_state.board[i][j] != 0
-                        st.markdown(
-                            f"<div style='{get_cell_style(i, j, is_input)}'>{val}</div>",
-                            unsafe_allow_html=True
-                        )
+                        st.markdown(f"<div style='{get_cell_style(i, j, is_input)}'>{val}</div>", unsafe_allow_html=True)
         else:
             st.info("👆 Click **Solve Puzzle** to see the solution.")
-
         st.markdown("</div>", unsafe_allow_html=True)
 
-
+# Tabs 2 & 3 remain unchanged
 with tab2:
     st.markdown("""
     <div style='background-color: white; padding: 20px; border-radius: 15px;'>
@@ -215,7 +216,6 @@ with tab2:
     </ul>
     </div>
     """, unsafe_allow_html=True)
-
 
 with tab3:
     st.markdown("""
