@@ -36,6 +36,7 @@ def fill_naked_singles(board):
 
 def fill_hidden_singles(board):
     progress = False
+
     for row in range(9):
         for num in range(1, 10):
             possible_col = -1
@@ -59,6 +60,7 @@ def fill_hidden_singles(board):
             if count == 1:
                 board[possible_row][col] = num
                 progress = True
+
     return progress
 
 
@@ -82,6 +84,7 @@ def solve_backtrack(board):
     find = find_empty(board)
     if not find:
         return True
+
     row, col = find
     for num in range(1, 10):
         if is_safe(board, row, col, num):
@@ -101,6 +104,7 @@ def get_cell_style(i, j, is_input=True):
     border_right = "3px solid #2c3e50" if (j + 1) % 3 == 0 and j != 8 else "1px solid #bdc3c7"
     border_bottom = "3px solid #2c3e50" if (i + 1) % 3 == 0 and i != 8 else "1px solid #bdc3c7"
     bg_color = "#f8f9fa" if is_input else "#e8f5e9"
+
     return f"""
         background-color: {bg_color};
         padding: 15px;
@@ -119,11 +123,12 @@ def get_cell_style(i, j, is_input=True):
     """
 
 
-st.set_page_config(page_title="Sudoku Solver", page_icon="🧩", layout="wide")
+# ------------------ UI ------------------
 
+st.set_page_config(page_title="Sudoku Solver", page_icon="🧩", layout="wide")
 st.title("🧩 Sudoku Solver Pro")
 
-if 'board' not in st.session_state:
+if "board" not in st.session_state:
     st.session_state.board = np.zeros((9, 9), dtype=int)
     st.session_state.solved_board = None
 
@@ -138,6 +143,10 @@ with tab1:
 
     with col1:
         if st.button("🗑️ Clear Board"):
+            # 🔑 FIX: clear widget state as well
+            for i in range(9):
+                for j in range(9):
+                    st.session_state[f"input_{i}_{j}"] = 0
             st.session_state.board = np.zeros((9, 9), dtype=int)
             st.session_state.solved_board = None
 
