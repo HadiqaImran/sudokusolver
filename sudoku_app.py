@@ -1,112 +1,9 @@
 import streamlit as st
 import numpy as np
+import subprocess
+import json
 
-# ------------------ Sudoku Logic ------------------
 
-def is_safe(board, row, col, num):
-    for x in range(9):
-        if board[row][x] == num:
-            return False
-    for x in range(9):
-        if board[x][col] == num:
-            return False
-    start_row = row - row % 3
-    start_col = col - col % 3
-    for i in range(3):
-        for j in range(3):
-            if board[i + start_row][j + start_col] == num:
-                return False
-    return True
-
-def fill_naked_singles(board):
-    progress = False
-    for row in range(9):
-        for col in range(9):
-            if board[row][col] == 0:
-                possible_num = 0
-                count = 0
-                for num in range(1, 10):
-                    if is_safe(board, row, col, num):
-                        possible_num = num
-                        count += 1
-                if count == 1:
-                    board[row][col] = possible_num
-                    progress = True
-    return progress
-
-def fill_hidden_singles(board):
-    progress = False
-    for row in range(9):
-        for num in range(1, 10):
-            possible_col = -1
-            count = 0
-            for col in range(9):
-                if board[row][col] == 0 and is_safe(board, row, col, num):
-                    possible_col = col
-                    count += 1
-            if count == 1:
-                board[row][possible_col] = num
-                progress = True
-    for col in range(9):
-        for num in range(1, 10):
-            possible_row = -1
-            count = 0
-            for row in range(9):
-                if board[row][col] == 0 and is_safe(board, row, col, num):
-                    possible_row = row
-                    count += 1
-            if count == 1:
-                board[possible_row][col] = num
-                progress = True
-    return progress
-
-def apply_techniques(board):
-    progress = True
-    while progress:
-        progress = False
-        progress |= fill_naked_singles(board)
-        progress |= fill_hidden_singles(board)
-
-def find_empty(board):
-    for row in range(9):
-        for col in range(9):
-            if board[row][col] == 0:
-                return row, col
-    return None
-
-def solve_backtrack(board):
-    find = find_empty(board)
-    if not find:
-        return True
-    row, col = find
-    for num in range(1, 10):
-        if is_safe(board, row, col, num):
-            board[row][col] = num
-            if solve_backtrack(board):
-                return True
-            board[row][col] = 0
-    return False
-
-def solve_sudoku(board):
-    apply_techniques(board)
-    return solve_backtrack(board)
-
-# ------------------ Board Validation ------------------
-
-def is_board_valid(board):
-    """Check for duplicates in rows, columns, and 3x3 boxes."""
-    for row in range(9):
-        for col in range(9):
-            num = board[row][col]
-            if num != 0:
-                board[row][col] = 0  # temporarily remove
-                if not is_safe(board, row, col, num):
-                    board[row][col] = num
-                    return False
-                board[row][col] = num
-    return True
-
-# ------------------ UI ------------------
 
 def get_cell_style(i, j, is_input=True):
     border_right = "3px solid #2c3e50" if (j + 1) % 3 == 0 and j != 8 else "1px solid #bdc3c7"
@@ -132,6 +29,7 @@ def get_cell_style(i, j, is_input=True):
 st.set_page_config(page_title="Sudoku Solver", page_icon="🧩", layout="wide")
 st.title("🧩 Sudoku Solver Pro")
 
+# Initialize session state
 if "board" not in st.session_state:
     st.session_state.board = np.zeros((9, 9), dtype=int)
     st.session_state.solved_board = None
@@ -142,28 +40,26 @@ with tab1:
     st.markdown("<h2 style='text-align: center;'>🎯 Enter Your Puzzle</h2>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
 
-    # Clear board
+    # Clear board button
     with col1:
         if st.button("🗑️ Clear Board"):
-            for i in range(9):
-                for j in range(9):
-                    st.session_state[f"input_{i}_{j}"] = 0
             st.session_state.board = np.zeros((9, 9), dtype=int)
             st.session_state.solved_board = None
 
-    # Solve puzzle
+    # Solve puzzle button
     with col2:
         if st.button("✨ Solve Puzzle"):
-            if not is_board_valid(st.session_state.board):
-                st.error("❌ Invalid puzzle! Duplicates in row, column, or box detected.")
-            else:
-                board_copy = st.session_state.board.copy()
-                if solve_sudoku(board_copy):
-                    st.session_state.solved_board = board_copy
-                    st.success("✅ Puzzle solved successfully!")
-                    st.balloons()  # 🎉 balloons
-                else:
-                    st.error("❌ No solution exists!")
+            # Send board to C++ solver (assumes ./sudoku_solver reads JSON input/output)
+            with open("input_board.json", "w") as f:
+                json.dump(st.session_state.board.tolist(), f)
+            try:
+                result = subprocess.run(["./sudoku_solver"], capture_output=True, text=True, check=True)
+                solved_board = np.array(json.loads(result.stdout))
+                st.session_state.solved_board = solved_board
+                st.success("✅ Puzzle solved successfully!")
+                st.balloons()
+            except Exception as e:
+                st.error(f"❌ Solver failed! Make sure the C++ executable exists.\n{e}")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -204,15 +100,13 @@ with tab1:
             st.info("👆 Click **Solve Puzzle** to see the solution.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-# Tabs 2 & 3 remain unchanged
 with tab2:
     st.markdown("""
     <div style='background-color: white; padding: 20px; border-radius: 15px;'>
     <h3>📚 How the Algorithm Works</h3>
     <ul>
-        <li><b>Naked Singles:</b> Cells with only one valid number</li>
-        <li><b>Hidden Singles:</b> Numbers that fit in only one position</li>
-        <li><b>Backtracking:</b> Recursive search for remaining cells</li>
+        <li><b>C++ Solver:</b> Uses naked/hidden singles + backtracking</li>
+        <li>Front-end only handles input/output visualization</li>
     </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -221,16 +115,15 @@ with tab3:
     st.markdown("""
     <div style='background-color: white; padding: 30px; border-radius: 15px;'>
     <p>
-    This Sudoku solver allows users to manually input any valid Sudoku puzzle
-    and solves it using logical techniques followed by backtracking.
+    This Sudoku solver lets users manually input a puzzle and sends it to a C++ solver.
     </p>
 
     <h4>✨ Features</h4>
     <ul>
         <li>Manual puzzle input</li>
-        <li>Automatic Sudoku solving</li>
+        <li>Automatic Sudoku solving via C++ backend</li>
         <li>Visual distinction between input and solved cells</li>
-        <li>Efficient algorithm</li>
+        <li>Clean front-end with Streamlit</li>
     </ul>
 
     <h4>🎮 How to Use</h4>
