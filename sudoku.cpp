@@ -1,7 +1,9 @@
 #include <iostream>
 #include <vector>
+#include <fstream>
+#include "json.hpp"
 using namespace std;
-
+using json = nlohmann::json;
 class SudokuSolver {
 private:
     vector<vector<int>> board;
@@ -178,23 +180,35 @@ public:
             cout << endl;
         }
     }
+vector<vector<int>> getBoard() {
+    return board;
+}
+
 };
 
 int main() {
-   vector<vector<int>> puzzle(9, vector<int>(9, 0));
-    cout << "Original Puzzle:" << endl;
+    // Read puzzle from JSON
+    ifstream fin("input_board.json");
+    if (!fin.is_open()) {
+        cerr << "Error: Could not open input_board.json" << endl;
+        return 1;
+    }
+
+    json j;
+    fin >> j;
+    vector<vector<int>> puzzle = j.get<vector<vector<int>>>();
+    fin.close();
+
     SudokuSolver solver(puzzle);
-    solver.printBoard();
 
-    cout << "\nSolving...\n" << endl;
+    if (!solver.solve()) {
+        cerr << "No solution exists!" << endl;
+        return 1;
+    }
 
-    if (solver.solve()) {
-        cout << "Solved Puzzle:" << endl;
-        solver.printBoard();
-    }
-    else {
-        cout << "No solution exists!" << endl;
-    }
+    // Output solved board as JSON
+    json out = solver.getBoard();
+    cout << out.dump() << endl;
 
     return 0;
 }
